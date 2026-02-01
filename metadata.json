@@ -1,0 +1,5 @@
+{
+  "name": "Copy of MarketInsight Indonesia",
+  "description": "An AI-powered financial intelligence tool that synthesizes market outlooks and news analysis from top financial sources like CNBC Indonesia, Bloomberg, and Bisnis Indonesia using Gemini Search Grounding.",
+  "requestFramePermissions": []
+}
