@@ -1,7 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import { AnalysisResult, SUPPORTED_SOURCES } from "../types";
 
-// Helper to format source list for the prompt
 const getSourceListString = () => {
   return SUPPORTED_SOURCES.map(s => s.url).join(', ');
 };
@@ -9,38 +8,70 @@ const getSourceListString = () => {
 const apiKey = process.env.API_KEY || '';
 const ai = new GoogleGenAI({ apiKey });
 
-// Standard Model for heavy reasoning + search
 const MODEL_NAME = 'gemini-3-pro-preview';
 
 export const generateWeeklyOutlook = async (): Promise<AnalysisResult> => {
   const sources = getSourceListString();
   const today = new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
+  // PROMPT DIOPTIMALKAN UNTUK MEMBEDAKAN TWITTER VS BERITA RESMI
   const prompt = `
-    You are a Senior Financial Analyst for the Indonesian Market.
     Current Date: ${today}.
+    Role: Senior Market Strategist & Equity Analyst.
 
-    TASK:
-    Create a comprehensive "Weekly Market Outlook" report. 
-    
-    CONSTRAINTS:
-    - You MUST use the Google Search tool to find the *latest* news (last 7 days) specifically from these domains: ${sources}.
-    - Do not invent news. Base everything on search results.
-    - If search results are insufficient for a specific section, state that clearly based on available data.
+    TASK: 
+    Generate a comprehensive Top-Down Market Outlook by cross-referencing three specific data layers to analyze the Indonesian Stock Exchange (IHSG) and its various sectors.
+  
+    LAYER 1: OFFICIAL REGULATORY & NEWS (High-Trust)
+    - Sources: Bank Indonesia (bi.go.id), IDX (idx.co.id), BPS (bps.go.id), Bloomberg, Reuters, FT, and ${sources}.
+    - Action: Analyze BI-Rate, liquidity (GWM), BPS inflation, and IDX disclosures (MSCI rebalancing, Corporate Actions).
 
-    REPORT STRUCTURE (Markdown):
-    1. **Executive Summary**: 3 bullet points summarizing the week's sentiment.
-    2. **Macroeconomic Overview**: 
-       - Key global/local economic data released recently.
-       - Central bank policies (BI, Fed).
-    3. **Commodity Watch**: 
-       - Oil, Coal, CPO, Gold, Nickel updates.
-    4. **Stock Market Strategy (IHSG)**:
-       - Top-down analysis impact on sectors.
-       - Potential winners/losers based on macro news.
-    5. **Key Takeaways**: Actionable insight for investors.
+    LAYER 2: SOCIAL SENTIMENT DIFFERENTIATION (X.com/Twitter)
+    - Action: Search "site:x.com [Trending Market Topic]" to contrast Official News vs Retail Speculation.
+    - Identify "Retail Noise", "Panic", or "Euphoria" that contradicts fundamental logic.
 
-    Tone: Professional, Insightful, Concise, Financial Terminology (English or Indonesian is fine, prefer Indonesian for local context but English is acceptable if better).
+    LAYER 3: NUMERICAL VALIDATION
+    - Sources: Yahoo Finance, Investing.com, Trading Economics.
+    - Essential Data: 10Y Yield Spread (ID-US), Net Foreign Flow, Commodity Prices (Coal, CPO, Nickel, Gold, Oil), and Sectoral Indices.
+
+
+    REPORT STRUCTURE (Strictly use this Markdown Format):
+    ## 1. GLOBAL MACROECONOMIC OVERVIEW
+    - Analysis of Fed/ECB/PBoC policies & impact on Emerging Market Foreign Flow.
+    - Geopolitical issues affecting global equity sentiment.
+    - Key Global Takeaway: [Insert brief insight]
+
+    ## 2. DOMESTIC ECONOMIC PULSE (INDONESIA)
+    - BI-Rate analysis, Rupiah stability, and BPS Inflation impact.
+    - Critical Focus: Regulatory shifts (OJK/BEI) or Index rebalancing (MSCI/FTSE).
+    - Domestic Sentiment: [Insert brief insight]
+
+    ## 3. COMMODITY & VALAS DASHBOARD
+    - Create a Markdown Table: | Commodity | Price | % Change | Impact on IDX |
+    - Correlation: How price movements affect Energy/Basic Material sectors.
+
+    ## 4. SECTORAL ANALYSIS & BLUE CHIP STRATEGY
+    - Identify "Leading" vs "Lagging" sectors.
+    - Deep dive into Blue Chips (e.g., Banking Big 4, ASII, TLKM) based on macro narrative.
+    - Divergence: Contrast IDX Official Data vs X.com Social Sentiment.
+
+    ## 5. INVESTMENT VERDICT & ACTIONABLE INSIGHTS
+    - IHSG Projection (Support/Resistance).
+    - Strategy: Define **Overweight** and **Underweight** sectors.
+    - Tactical advice for risk management.
+
+    FORMATTING CONSTRAINTS:
+    - Use Markdown Table for all numerical data in the "Data Dashboard".
+    - Use Horizontal Rules (---) to separate each of the 5 main sections.
+    - Use Bold Bold for stock tickers (e.g., **BBCA**).
+    - Use Blockquotes (>) for the "Investment Verdict" to make it stand out.
+    - Ensure a clean visual hierarchy using H2 (##) for main sections.
+    - Keep bullet points concise; no more than 2 sentences per point.
+
+    IMPORTANT:
+    - ALWAYS lead with official data from BI or IDX before mentioning secondary news sources.
+    - You MUST use "Google Search" tool for real-time verification.
+    - Tone: Professional, data-driven, Insightful, Concise, Financial Terminology (In English or Indonesian is fine, prefer Indonesian for local context but English is acceptable if better)."
   `;
 
   try {
@@ -49,13 +80,12 @@ export const generateWeeklyOutlook = async (): Promise<AnalysisResult> => {
       contents: prompt,
       config: {
         tools: [{ googleSearch: {} }],
-        temperature: 0.3, // Low temperature for factual accuracy
+        temperature: 0.2, // Lebih rendah agar lebih faktual
       },
     });
 
     const text = response.text || "No analysis generated.";
     
-    // Extract grounding metadata safely
     const rawChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
     const sourceLinks = rawChunks
       .map((chunk: any) => chunk.web)
@@ -67,7 +97,6 @@ export const generateWeeklyOutlook = async (): Promise<AnalysisResult> => {
       sources: sourceLinks,
       timestamp: new Date().toISOString(),
     };
-
   } catch (error) {
     console.error("Error generating outlook:", error);
     throw error;
@@ -78,28 +107,61 @@ export const analyzeNewsImpact = async (newsTopic: string): Promise<AnalysisResu
   const sources = getSourceListString();
   
   const prompt = `
-    You are a Financial Risk Analyst.
-    
-    TASK:
-    Analyze the market impact of the following news topic/headline: "${newsTopic}"
-    
-    CONSTRAINTS:
-    - Search for context and details ONLY from these high-trust sources: ${sources}.
-    - Focus on the impact on the Indonesian Stock Market (IHSG) and Rupiah (IDR).
+    Role: Senior Financial Risk Analyst & Market Strategist.
+    Current Date: ${today}.
+    TASK: Analyze the market impact of the following high-impact news topic: "${newsTopic}"
 
-    OUTPUT FORMAT (Markdown):
-    1. **News Context**: What actually happened? (Cite sources).
-    2. **Direct Impact**:
-       - **Positive**: Sectors/Stocks likely to benefit.
-       - **Negative**: Sectors/Stocks likely to suffer.
-    3. **Macro Linkage**: How does this affect inflation, rates, or GDP?
-    4. **Verdict**: Bullish, Bearish, or Neutral?
+    ---
+    ANALYSIS GUIDELINES:
+    1. **Fact-Checking & Contextualization**:
+       - Verify using: Bank Indonesia (bi.go.id), IDX (idx.co.id), and BPS (bps.go.id).
+       - Summary: "What happened" vs "What the market expected".
 
-    IMPORTANT:
-    At the very end of your response, strictly output one of the following tags on a new line to summarize the overall sentiment:
-    "SENTIMENT_TAG: Positive"
-    "SENTIMENT_TAG: Negative"
-    "SENTIMENT_TAG: Neutral"
+    2. **Market Correlation & Linkage**:
+       - **IHSG Movement**: Drag or Tailwind?
+       - **Currency (IDR)**: Stability and potential BI intervention.
+       - **Sectoral Impact**: Map affected IDX sectors (Banking, Energy, etc.).
+
+    3. **Foreign Flow & Institutional Projection**:
+       - Predict Capital Inflow/Outflow.
+       - Analyze how Fund Managers (Dapen, Insurance) might rebalance.
+
+    4. **Sentiment Divergence Cross-Check**:
+       - Search through all google grounder research and "site:x.com [Keyword from newsTopic]".
+       - Compare Official Tone vs X.com Retail Sentiment (Detect Panic/Euphoria).
+
+    OUTPUT STRUCTURE (MARKDOWN):
+    ## 1. CONTEXT & FACT-CHECK
+    - Summary of the event based on official data.
+    - Identification of the "Core Trigger".
+
+    ## 2. MARKET LINKAGE & SECTORAL IMPACT
+    -Direct Impact on Blue Chips: Specifically mention tickers like BBCA, ASII, TLKM, or relevant leaders in the affected sector.
+    -The Matrix: Identify "Winner" and "Loser" sectors in a concise list.
+    
+    ## 3. RISK ASSESSMENT & BLACK SWAN SCENARIOS
+    - Identify downside risks or secondary effects (contagion risk).
+    - Worst-case scenario analysis.
+
+    ## 4. SENTIMENT DIVERGENCE ANALYSIS
+    - Analysis: Professional vs Twitter crowd reaction.
+    - Driven by Fundamentals or Pure Noise?
+
+    ## 5. STRATEGIC VERDICT & ACTIONABLE INSIGHTS
+    > **Verdict: [Bullish / Bearish / Neutral]**
+    - Short-term (1-5 days) vs. Long-term (1 month+) outlook.
+    - Actionable advice (e.g., Buy the dip, Take profit, Wait & see).
+
+    FORMATTING CONSTRAINTS:
+    - Use Markdown Table for all numerical data in the "Data Dashboard".
+    - Use Horizontal Rules (---) to separate each of the 5 main sections.
+    - Use Bold Bold for stock tickers (e.g., **BBCA**).
+    - Use Blockquotes (>) for the "Investment Verdict" to make it stand out.
+    - Ensure a clean visual hierarchy using H2 (##) for main sections.
+    - Keep bullet points concise; no more than 2 sentences per point.
+
+    At the end, output: "SENTIMENT_TAG: [Positive/Negative/Neutral]
+    Tone: Professional, Insightful, Concise, Financial Terminology (In English or Indonesian is fine, prefer Indonesian for local context but English is acceptable if better)."
   `;
 
   try {
@@ -108,22 +170,16 @@ export const analyzeNewsImpact = async (newsTopic: string): Promise<AnalysisResu
       contents: prompt,
       config: {
         tools: [{ googleSearch: {} }],
-        temperature: 0.4,
+        temperature: 0.2,
       },
     });
 
     let text = response.text || "No analysis generated.";
     let sentiment: 'Positive' | 'Negative' | 'Neutral' | undefined;
 
-    // Extract sentiment
     const sentimentMatch = text.match(/SENTIMENT_TAG:\s*(Positive|Negative|Neutral)/i);
     if (sentimentMatch) {
-      const rawSentiment = sentimentMatch[1].toLowerCase();
-      if (rawSentiment === 'positive') sentiment = 'Positive';
-      else if (rawSentiment === 'negative') sentiment = 'Negative';
-      else sentiment = 'Neutral';
-
-      // Clean the tag from the markdown
+      sentiment = sentimentMatch[1] as any;
       text = text.replace(sentimentMatch[0], '').trim();
     }
 

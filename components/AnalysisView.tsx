@@ -95,3 +95,4 @@ export const AnalysisView: React.FC<Props> = ({ result, isLoading, title }) => {
     </div>
   );
 };
+
